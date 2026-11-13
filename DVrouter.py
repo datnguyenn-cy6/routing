@@ -21,7 +21,11 @@ class DVrouter(Router):
         self.last_time = 0
         # TODO
         #   add your own class fields and initialization code here
-        pass
+        self.INF = 16
+        self.neighbors = {}
+        self.neighbor_vectors = {}
+        self.distance_vector = {self.addr: 0}
+        self.forwarding_table = {}
 
     def handle_packet(self, port, packet):
         """Process incoming packet."""
