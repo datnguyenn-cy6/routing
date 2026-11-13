@@ -59,6 +59,8 @@ class DVrouter(Router):
             self.distance_vector[endpoint] = cost
             self.forwarding_table[endpoint] = port
 
+        self._broadcast_distance_vector()
+
     def handle_remove_link(self, port):
         """Handle removed link."""
         # TODO
@@ -67,13 +69,29 @@ class DVrouter(Router):
         #   broadcast the distance vector of this router to neighbors
         pass
 
+    def _broadcast_distance_vector(self):
+        """Send this router's distance vector to all neighbors."""
+        import json
+        from packet import Packet
+
+        content = json.dumps(self.distance_vector)
+
+        for port, (endpoint, cost) in self.neighbors.items():
+            packet = Packet(
+                Packet.ROUTING,
+                self.addr,
+                endpoint,
+                content
+            )
+            self.send(port, packet)
+
     def handle_time(self, time_ms):
         """Handle current time."""
         if time_ms - self.last_time >= self.heartbeat_time:
             self.last_time = time_ms
             # TODO
             #   broadcast the distance vector of this router to neighbors
-            pass
+            self._broadcast_distance_vector()
 
     def __repr__(self):
         """Representation for debugging in the network visualizer."""
