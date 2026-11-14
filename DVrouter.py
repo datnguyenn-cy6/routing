@@ -45,7 +45,35 @@ class DVrouter(Router):
             #   update the distance vector of this router
             #   update the forwarding table
             #   broadcast the distance vector of this router to neighbors
-            pass
+            import json
+
+            if port not in self.neighbors:
+                return
+
+            if packet.src_addr != self.neighbors[port][0]:
+                return
+
+            try:
+                received_vector = json.loads(packet.content)
+            except (TypeError, ValueError):
+                return
+
+            if not isinstance(received_vector, dict):
+                return
+
+            if any(
+                not isinstance(cost, (int, float)) or cost < 0
+                for cost in received_vector.values()
+            ):
+                return
+
+            if self.neighbor_vectors.get(port) == received_vector:
+                return
+
+            self.neighbor_vectors[port] = received_vector
+
+            if self._recompute_routes():
+                self._broadcast_distance_vector()
 
     def handle_new_link(self, port, endpoint, cost):
         """Handle new link."""
@@ -68,6 +96,35 @@ class DVrouter(Router):
         #   update the forwarding table
         #   broadcast the distance vector of this router to neighbors
         pass
+
+    def _recompute_routes(self):
+        """Recompute shortest paths using Bellman-Ford."""
+        new_vector = {self.addr: 0}
+        new_forwarding = {}
+
+        # Directly connected destinations
+        for port, (endpoint, cost) in self.neighbors.items():
+            if endpoint == self.addr:
+                continue
+            if cost < new_vector.get(endpoint, self.INF):
+                new_vector[endpoint] = cost
+                new_forwarding[endpoint] = port
+
+        # Destinations advertised by neighbors
+        for port, (_, link_cost) in self.neighbors.items():
+            for dst, advertised_cost in self.neighbor_vectors.get(port, {}).items():
+                if dst == self.addr:
+                    continue
+
+                candidate = link_cost + advertised_cost
+                if candidate < new_vector.get(dst, self.INF):
+                    new_vector[dst] = candidate
+                    new_forwarding[dst] = port
+
+        changed = new_vector != self.distance_vector
+        self.distance_vector = new_vector
+        self.forwarding_table = new_forwarding
+        return changed
 
     def _broadcast_distance_vector(self):
         """Send this router's distance vector to all neighbors."""
