@@ -82,11 +82,13 @@ class DVrouter(Router):
         #   update the forwarding table
         #   broadcast the distance vector of this router to neighbors
         self.neighbors[port] = (endpoint, cost)
+        self.neighbor_vectors.pop(port, None)
 
         if cost < self.distance_vector.get(endpoint, self.INF):
             self.distance_vector[endpoint] = cost
             self.forwarding_table[endpoint] = port
 
+        self._recompute_routes()
         self._broadcast_distance_vector()
 
     def handle_remove_link(self, port):
@@ -95,7 +97,14 @@ class DVrouter(Router):
         #   update the distance vector of this router
         #   update the forwarding table
         #   broadcast the distance vector of this router to neighbors
-        pass
+        if port not in self.neighbors:
+            return
+
+        del self.neighbors[port]
+        self.neighbor_vectors.pop(port, None)
+
+        self._recompute_routes()
+        self._broadcast_distance_vector()
 
     def _recompute_routes(self):
         """Recompute shortest paths using Bellman-Ford."""
