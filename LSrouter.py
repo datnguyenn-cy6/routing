@@ -21,7 +21,10 @@ class LSrouter(Router):
         self.last_time = 0
         # TODO
         #   add your own class fields and initialization code here
-        pass
+        self.neighbors = {}
+        self.sequence_number = 0
+        self.link_state_db = {self.addr: {"seq": 0, "links": {}}}
+        self.forwarding_table = {}
 
     def handle_packet(self, port, packet):
         """Process incoming packet."""
