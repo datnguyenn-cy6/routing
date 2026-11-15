@@ -130,7 +130,11 @@ class DVrouter(Router):
                     new_vector[dst] = candidate
                     new_forwarding[dst] = port
 
-        changed = new_vector != self.distance_vector
+        changed = (
+            new_vector != self.distance_vector
+            or new_forwarding != self.forwarding_table
+        )
+
         self.distance_vector = new_vector
         self.forwarding_table = new_forwarding
         return changed
@@ -140,9 +144,14 @@ class DVrouter(Router):
         import json
         from packet import Packet
 
-        content = json.dumps(self.distance_vector)
-
         for port, (endpoint, cost) in self.neighbors.items():
+            advertised_vector = self.distance_vector.copy()
+
+            for destination, next_port in self.forwarding_table.items():
+                if next_port == port:
+                    advertised_vector[destination] = self.INF
+
+            content = json.dumps(advertised_vector)
             packet = Packet(
                 Packet.ROUTING,
                 self.addr,
