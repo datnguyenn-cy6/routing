@@ -52,6 +52,7 @@ class LSrouter(Router):
         self.neighbors[port] = (endpoint, cost)
         self.link_state_db[self.addr]["links"][endpoint] = cost
         self.forwarding_table[endpoint] = port
+        self._broadcast_link_state()
 
     def handle_remove_link(self, port):
         """Handle removed link."""
@@ -66,7 +67,30 @@ class LSrouter(Router):
             self.last_time = time_ms
             # TODO
             #   broadcast the link state of this router to all neighbors
-            pass
+            self._broadcast_link_state()
+
+    def _broadcast_link_state(self):
+        """Broadcast this router's link state to all neighbors."""
+        import json
+        from packet import Packet
+
+        self.sequence_number += 1
+        self.link_state_db[self.addr]["seq"] = self.sequence_number
+
+        content = json.dumps({
+            "origin": self.addr,
+            "seq": self.sequence_number,
+            "links": self.link_state_db[self.addr]["links"].copy()
+        })
+
+        for port, (endpoint, cost) in self.neighbors.items():
+            packet = Packet(
+                Packet.ROUTING,
+                self.addr,
+                endpoint,
+                content
+            )
+            self.send(port, packet)
 
     def __repr__(self):
         """Representation for debugging in the network visualizer."""
