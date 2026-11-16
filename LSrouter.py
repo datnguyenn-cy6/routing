@@ -42,7 +42,49 @@ class LSrouter(Router):
             #   update the local copy of the link state
             #   update the forwarding table
             #   broadcast the packet to other neighbors
-            pass
+            import json
+            from packet import Packet
+
+            if not packet.is_routing or port not in self.neighbors:
+                return
+
+            try:
+                lsp = json.loads(packet.content)
+                origin = lsp["origin"]
+                seq = lsp["seq"]
+                links = lsp["links"]
+            except (TypeError, ValueError, KeyError):
+                return
+
+            if (
+                not isinstance(origin, str)
+                or not isinstance(seq, int)
+                or seq < 0
+                or not isinstance(links, dict)
+            ):
+                return
+
+            previous = self.link_state_db.get(origin)
+
+            if previous is not None and seq <= previous["seq"]:
+                return
+
+            self.link_state_db[origin] = {
+                "seq": seq,
+                "links": links.copy()
+            }
+
+            for out_port, (endpoint, cost) in self.neighbors.items():
+                if out_port == port:
+                    continue
+
+                flooded_packet = Packet(
+                    Packet.ROUTING,
+                    self.addr,
+                    endpoint,
+                    packet.content
+                )
+                self.send(out_port, flooded_packet)
 
     def handle_new_link(self, port, endpoint, cost):
         """Handle new link."""
