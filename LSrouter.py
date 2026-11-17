@@ -74,6 +74,8 @@ class LSrouter(Router):
                 "links": links.copy()
             }
 
+            self._recompute_routes()
+
             for out_port, (endpoint, cost) in self.neighbors.items():
                 if out_port == port:
                     continue
@@ -94,6 +96,7 @@ class LSrouter(Router):
         self.neighbors[port] = (endpoint, cost)
         self.link_state_db[self.addr]["links"][endpoint] = cost
         self.forwarding_table[endpoint] = port
+        self._recompute_routes()
         self._broadcast_link_state()
 
     def handle_remove_link(self, port):
@@ -110,6 +113,50 @@ class LSrouter(Router):
             # TODO
             #   broadcast the link state of this router to all neighbors
             self._broadcast_link_state()
+
+    def _recompute_routes(self):
+        """Compute shortest paths using Dijkstra's algorithm."""
+        import heapq
+
+        graph = {
+            node: state["links"]
+            for node, state in self.link_state_db.items()
+        }
+
+        direct_ports = {
+            endpoint: port
+            for port, (endpoint, cost) in self.neighbors.items()
+        }
+
+        distances = {self.addr: 0}
+        first_ports = {}
+        queue = [(0, self.addr)]
+
+        while queue:
+            distance, node = heapq.heappop(queue)
+
+            if distance != distances[node]:
+                continue
+
+            for neighbor, link_cost in graph.get(node, {}).items():
+                if neighbor == self.addr:
+                    continue
+
+                if node == self.addr:
+                    next_port = direct_ports.get(neighbor)
+                    if next_port is None:
+                        continue
+                else:
+                    next_port = first_ports[node]
+
+                new_distance = distance + link_cost
+
+                if new_distance < distances.get(neighbor, float("inf")):
+                    distances[neighbor] = new_distance
+                    first_ports[neighbor] = next_port
+                    heapq.heappush(queue, (new_distance, neighbor))
+
+        self.forwarding_table = first_ports
 
     def _broadcast_link_state(self):
         """Broadcast this router's link state to all neighbors."""
