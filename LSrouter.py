@@ -98,13 +98,21 @@ class LSrouter(Router):
         self.forwarding_table[endpoint] = port
         self._recompute_routes()
         self._broadcast_link_state()
+        self._sync_link_state(port, endpoint)
 
     def handle_remove_link(self, port):
         """Handle removed link."""
         # TODO
         #   update local data structures and forwarding table
         #   broadcast the new link state of this router to all neighbors
-        pass
+        if port not in self.neighbors:
+            return
+
+        endpoint, _ = self.neighbors.pop(port)
+        self.link_state_db[self.addr]["links"].pop(endpoint, None)
+
+        self._recompute_routes()
+        self._broadcast_link_state()
 
     def handle_time(self, time_ms):
         """Handle current time."""
@@ -157,6 +165,29 @@ class LSrouter(Router):
                     heapq.heappush(queue, (new_distance, neighbor))
 
         self.forwarding_table = first_ports
+
+    def _sync_link_state(self, port, endpoint):
+        """Send known remote link states to a new neighbor."""
+        import json
+        from packet import Packet
+
+        for origin, state in self.link_state_db.items():
+            if origin == self.addr:
+                continue
+
+            content = json.dumps({
+                "origin": origin,
+                "seq": state["seq"],
+                "links": state["links"].copy()
+            })
+
+            packet = Packet(
+                Packet.ROUTING,
+                self.addr,
+                endpoint,
+                content
+            )
+            self.send(port, packet)
 
     def _broadcast_link_state(self):
         """Broadcast this router's link state to all neighbors."""
